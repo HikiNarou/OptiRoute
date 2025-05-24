@@ -27,15 +27,16 @@ import com.optiroute.com.R
 import com.optiroute.com.data.local.entity.VehicleEntity
 import com.optiroute.com.ui.theme.spacing
 import com.optiroute.com.utils.ConfirmationDialog
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 @Composable
 fun VehiclesScreen(
     navController: NavController,
     viewModel: VehicleViewModel = hiltViewModel(),
-    onNavigateToAddEditVehicle: (Int?) -> Unit // Int? untuk vehicleId, null jika tambah baru
+    onNavigateToAddEditVehicle: (Int?) -> Unit
 ) {
-    val context = LocalContext.current
+    val context = LocalContext.current // Digunakan untuk getString di dalam LaunchedEffect
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -48,17 +49,20 @@ fun VehiclesScreen(
             viewModel.uiEvent.collect { event ->
                 when (event) {
                     is VehicleUiEvent.ShowSnackbar -> {
+                        // Mengambil string di dalam coroutine scope, sebelum memanggil showSnackbar
                         val message = event.messageText ?: event.messageResId?.let {
-                            if (event.args != null) stringResource(id = it, formatArgs = event.args)
-                            else stringResource(id = it)
+                            if (event.args != null) context.getString(it, *event.args) // Menggunakan context.getString
+                            else context.getString(it)
                         } ?: ""
                         if (message.isNotBlank()) {
-                            snackbarHostState.showSnackbar(message)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(message)
+                            }
                         }
                         Timber.d("Snackbar event: $message")
                     }
                     is VehicleUiEvent.NavigateBack -> {
-                        // Tidak relevan untuk layar daftar, lebih untuk form
+                        // Not relevant for list screen
                     }
                 }
             }
@@ -66,11 +70,12 @@ fun VehiclesScreen(
     }
 
     if (showDeleteConfirmationDialog != null) {
+        val vehicleToDelete = showDeleteConfirmationDialog!! // Aman karena sudah dicek non-null
         ConfirmationDialog(
             title = stringResource(id = R.string.delete_confirmation_title),
-            message = stringResource(id = R.string.confirm_delete_vehicle_message, showDeleteConfirmationDialog!!.name),
+            message = stringResource(id = R.string.confirm_delete_vehicle_message, vehicleToDelete.name),
             onConfirm = {
-                viewModel.deleteVehicle(showDeleteConfirmationDialog!!)
+                viewModel.deleteVehicle(vehicleToDelete)
                 showDeleteConfirmationDialog = null
             },
             onDismiss = {
@@ -86,8 +91,8 @@ fun VehiclesScreen(
         floatingActionButton = {
             FloatingActionButton(
                 onClick = {
-                    viewModel.prepareNewVehicleForm() // Pastikan form direset sebelum navigasi
-                    onNavigateToAddEditVehicle(null) // null untuk mode tambah
+                    viewModel.prepareNewVehicleForm()
+                    onNavigateToAddEditVehicle(null)
                 },
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -126,7 +131,7 @@ fun VehiclesScreen(
                     )
                 }
                 is VehicleListUiState.Success -> {
-                    if (state.vehicles.isEmpty()) { // Dobel cek, seharusnya sudah ditangani oleh state Empty
+                    if (state.vehicles.isEmpty()) {
                         Text(
                             text = stringResource(id = R.string.vehicle_list_empty),
                             style = MaterialTheme.typography.bodyLarge,
@@ -169,7 +174,7 @@ private fun VehicleItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onEditClick() }, // Klik item untuk mengedit
+            .clickable { onEditClick() },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
@@ -228,4 +233,3 @@ private fun VehicleItem(
         }
     }
 }
-

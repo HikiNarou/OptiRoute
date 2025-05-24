@@ -71,7 +71,14 @@ val md_theme_dark_scrim = Color(0xFF000000)
 // Warna tambahan untuk rute (jika diperlukan langsung di Compose)
 val MapRouteColor1 = Color(0xFFFF5722)
 val MapRouteColor2 = Color(0xFF4CAF50)
-// ... tambahkan warna rute lainnya jika perlu
+val MapRouteColor3 = Color(0xFF2196F3)
+val MapRouteColor4 = Color(0xFFCDDC39) // Diubah dari Amber agar lebih variatif
+val MapRouteColor5 = Color(0xFF9C27B0)
+val MapRouteColor6 = Color(0xFFE91E63)
+val MapRouteColor7 = Color(0xFF00BCD4)
+val MapRouteColor8 = Color(0xFF8BC34A)
+val MapRouteColor9 = Color(0xFFFF9800)
+val MapRouteColor10 = Color(0xFF795548) // Diubah dari ungu agar lebih variatif
 
 val MapDepotMarkerColor = Color(0xFFD32F2F)
 val MapCustomerMarkerColor = Color(0xFF1976D2)

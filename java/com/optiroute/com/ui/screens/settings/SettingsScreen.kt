@@ -8,8 +8,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Policy // Contoh ikon baru
-import androidx.compose.material.icons.filled.Terminal // Contoh ikon baru
+import androidx.compose.material.icons.filled.Policy
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -39,7 +39,7 @@ fun SettingsScreen(
     navController: NavController,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
+    val context = LocalContext.current // Digunakan untuk getString di dalam LaunchedEffect
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -48,14 +48,22 @@ fun SettingsScreen(
     val uiState by viewModel.uiState.collectAsState()
     var showClearDataDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(lifecycleOwner.lifecycle) {
+    // Mengambil string resource di lingkup Composable untuk digunakan dalam callback
+    val cannotOpenEmailMessage = stringResource(R.string.error_occurred) // Ganti dengan string yang lebih spesifik jika ada, misal "Tidak dapat membuka aplikasi email."
+    val cannotOpenUrlMessage = stringResource(R.string.error_occurred)   // Ganti dengan string yang lebih spesifik jika ada, misal "Tidak dapat membuka URL."
+
+
+    LaunchedEffect(lifecycleOwner.lifecycle) { // Kunci Unit dihapus agar re-subscribe jika perlu
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.uiEvent.collect { event ->
                 when (event) {
                     is SettingsUiEvent.ShowSnackbar -> {
-                        val message = event.messageText ?: event.messageResId?.let { stringResource(id = it) } ?: ""
+                        // Menggunakan context yang sudah di-capture dari lingkup Composable
+                        val message = event.messageText ?: event.messageResId?.let { context.getString(it) } ?: ""
                         if (message.isNotBlank()) {
-                            snackbarHostState.showSnackbar(message)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(message)
+                            }
                         }
                     }
                 }
@@ -80,10 +88,9 @@ fun SettingsScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = { // TopAppBar ditambahkan di MainActivity, jadi tidak perlu di sini jika mengikuti pola itu
-            // TopAppBar(title = { Text(stringResource(R.string.settings_title)) })
-        }
+        snackbarHost = { SnackbarHost(snackbarHostState) }
+        // TopAppBar sudah ada di MainActivity, jadi tidak perlu ditambahkan lagi di sini
+        // jika mengikuti pola yang sudah ada.
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -122,25 +129,25 @@ fun SettingsScreen(
                 icon = Icons.Filled.Info,
                 title = stringResource(R.string.app_name) + " Versi",
                 subtitle = uiState.appVersion,
-                onClick = {} // Tidak ada aksi
+                onClick = {} // Tidak ada aksi, hanya info
             )
             SettingItem(
-                icon = Icons.Filled.Terminal, // Ganti dengan ikon yang sesuai
+                icon = Icons.Filled.Terminal, // Contoh ikon, bisa diganti
                 title = "Dikembangkan Oleh",
-                subtitle = "Kelompok 8 - D4 MI POLSRI 2025", // Sesuaikan dengan nama kelompok Anda
+                subtitle = "Kelompok 8 - D4 MI POLSRI 2025", // Sesuaikan
                 onClick = {}
             )
             SettingItem(
                 icon = Icons.AutoMirrored.Filled.HelpOutline,
                 title = "Bantuan & Dukungan",
-                subtitle = "hubungi.optiroute@example.com", // Ganti dengan email kontak
+                subtitle = "hubungi.optiroute@example.com", // Ganti dengan email kontak Anda
                 onClick = {
                     try {
                         uriHandler.openUri("mailto:hubungi.optiroute@example.com")
                     } catch (e: Exception) {
                         Timber.e(e, "Failed to open mail client")
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Tidak dapat membuka aplikasi email.")
+                            snackbarHostState.showSnackbar(cannotOpenEmailMessage)
                         }
                     }
                 }
@@ -148,23 +155,23 @@ fun SettingsScreen(
             SettingItem(
                 icon = Icons.Filled.Policy,
                 title = "Kebijakan Privasi",
-                subtitle = "Baca kebijakan privasi kami",
+                subtitle = "Baca kebijakan privasi kami", // Tambahkan subtitle jika ada
                 onClick = {
                     try {
                         uriHandler.openUri("https://example.com/privacy") // Ganti dengan URL kebijakan privasi Anda
                     } catch (e: Exception) {
                         Timber.e(e, "Failed to open privacy policy URL")
                         coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Tidak dapat membuka URL.")
+                            snackbarHostState.showSnackbar(cannotOpenUrlMessage)
                         }
                     }
                 }
             )
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.weight(1f)) // Mendorong footer ke bawah
 
             Text(
-                text = "OptiRoute © 2025", // Sesuaikan tahun
+                text = "OptiRoute © 2025", // Sesuaikan tahun jika perlu
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -197,11 +204,11 @@ private fun SettingItem(
     icon: ImageVector,
     title: String,
     subtitle: String? = null,
-    titleColor: Color = LocalContentColor.current,
-    iconTint: Color = MaterialTheme.colorScheme.secondary,
+    titleColor: Color = LocalContentColor.current, // Menggunakan LocalContentColor sebagai default
+    iconTint: Color = MaterialTheme.colorScheme.secondary, // Default tint untuk ikon
     onClick: () -> Unit
 ) {
-    Surface( // Menggunakan Surface untuk efek klik yang lebih baik
+    Surface( // Menggunakan Surface untuk efek klik yang lebih baik dan konsistensi tema
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),

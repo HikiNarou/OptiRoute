@@ -2,6 +2,7 @@ package com.optiroute.com.ui.screens.planroute
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border // Impor yang diperlukan
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -35,21 +36,12 @@ import com.optiroute.com.domain.vrp.RouteDetail
 import com.optiroute.com.domain.vrp.VrpSolution
 import com.optiroute.com.ui.screens.utils.bitmapDescriptorFromVector
 import com.optiroute.com.ui.screens.utils.toGoogleLatLng
-import com.optiroute.com.ui.theme.MapRouteColor1
-import com.optiroute.com.ui.theme.MapRouteColor10
-import com.optiroute.com.ui.theme.MapRouteColor2
-import com.optiroute.com.ui.theme.MapRouteColor3
-import com.optiroute.com.ui.theme.MapRouteColor4
-import com.optiroute.com.ui.theme.MapRouteColor5
-import com.optiroute.com.ui.theme.MapRouteColor6
-import com.optiroute.com.ui.theme.MapRouteColor7
-import com.optiroute.com.ui.theme.MapRouteColor8
-import com.optiroute.com.ui.theme.MapRouteColor9
-import com.optiroute.com.ui.theme.spacing
+import com.optiroute.com.ui.theme.* // Impor semua dari theme, termasuk MapRouteColorX
 import timber.log.Timber
 
-// Daftar warna untuk rute di peta (tetap sama)
-val routeColors = listOf(
+// Daftar warna untuk rute di peta (sudah didefinisikan di ui.theme.Color.kt)
+// Variabel ini akan mengambil nilai dari Color.kt karena wildcard import di atas
+val routeDisplayColorsList = listOf(
     MapRouteColor1, MapRouteColor2, MapRouteColor3, MapRouteColor4, MapRouteColor5,
     MapRouteColor6, MapRouteColor7, MapRouteColor8, MapRouteColor9, MapRouteColor10
 )
@@ -200,7 +192,7 @@ fun RouteResultsMapView(
         )
 
         vrpSolution.routes.forEachIndexed { routeIndex, routeDetail ->
-            val routeColor = routeColors[routeIndex % routeColors.size]
+            val routeColor = routeDisplayColorsList[routeIndex % routeDisplayColorsList.size]
             val polylinePoints = remember(routeDetail, depotLatLngGms) {
                 mutableListOf<com.google.android.gms.maps.model.LatLng>().apply {
                     add(depotLatLngGms)
@@ -292,7 +284,7 @@ fun RouteResultsListView(
         vrpSolution.routes.forEachIndexed { index, routeDetail ->
             stickyHeader {
                 Surface(
-                    color = routeColors[index % routeColors.size].copy(alpha = 0.3f), // Warna header sesuai rute
+                    color = routeDisplayColorsList[index % routeDisplayColorsList.size].copy(alpha = 0.3f), // Menggunakan routeDisplayColorsList
                     modifier = Modifier.fillMaxWidth(),
                     tonalElevation = 2.dp
                 ) {
@@ -380,7 +372,7 @@ fun RouteDetailCard(routeDetail: RouteDetail, depotName: String, routeIndex: Int
                 stopName = "$depotName (Depot - Mulai)",
                 index = 0,
                 isDepot = true,
-                routeColor = routeColors[routeIndex % routeColors.size],
+                routeColor = routeDisplayColorsList[routeIndex % routeDisplayColorsList.size], // Menggunakan routeDisplayColorsList
                 isFirst = true
             )
 
@@ -390,14 +382,14 @@ fun RouteDetailCard(routeDetail: RouteDetail, depotName: String, routeIndex: Int
                     demand = customer.demand,
                     address = customer.address,
                     index = index + 1,
-                    routeColor = routeColors[routeIndex % routeColors.size]
+                    routeColor = routeDisplayColorsList[routeIndex % routeDisplayColorsList.size] // Menggunakan routeDisplayColorsList
                 )
             }
             StopItemView(
                 stopName = "$depotName (Depot - Selesai)",
                 index = routeDetail.stops.size + 1,
                 isDepot = true,
-                routeColor = routeColors[routeIndex % routeColors.size],
+                routeColor = routeDisplayColorsList[routeIndex % routeDisplayColorsList.size], // Menggunakan routeDisplayColorsList
                 isLast = true
             )
         }
@@ -419,39 +411,36 @@ fun StopItemView(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = MaterialTheme.spacing.extraSmall),
-        verticalAlignment = Alignment.Top // Align to top untuk garis vertikal
+        verticalAlignment = Alignment.Top
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            // Garis vertikal atas (kecuali untuk item pertama)
             if (!isFirst) {
                 Box(
                     modifier = Modifier
-                        .height(12.dp) // Setengah tinggi sebelum ikon
+                        .height(12.dp)
                         .width(2.dp)
                         .background(MaterialTheme.colorScheme.outlineVariant)
                 )
             }
-
             Box(
                 modifier = Modifier
-                    .size(32.dp) // Ukuran ikon lebih besar
+                    .size(32.dp)
                     .clip(CircleShape)
                     .background(if (isDepot) MaterialTheme.colorScheme.tertiary else routeColor)
-                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape), // Perbaikan: Menambahkan impor border
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = if (isDepot) "D" else (index).toString(),
-                    style = MaterialTheme.typography.bodySmall, // Lebih kecil agar muat
+                    style = MaterialTheme.typography.bodySmall,
                     color = if (isDepot) MaterialTheme.colorScheme.onTertiary else Color.White,
                     fontWeight = FontWeight.Bold
                 )
             }
-            // Garis vertikal bawah (kecuali untuk item terakhir)
             if (!isLast) {
                 Box(
                     modifier = Modifier
-                        .height(if (address != null && demand != null) 48.dp else 24.dp) // Perpanjang garis jika ada alamat/demand
+                        .height(if (address != null && demand != null) 48.dp else 24.dp)
                         .width(2.dp)
                         .background(MaterialTheme.colorScheme.outlineVariant)
                 )
@@ -461,7 +450,7 @@ fun StopItemView(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = stopName,
-                style = MaterialTheme.typography.titleSmall, // Lebih jelas
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
             address?.takeIf { it.isNotBlank() }?.let {

@@ -14,9 +14,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Route
-import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.LocalShipping
-import androidx.compose.material.icons.outlined.CheckCircleOutline
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -24,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector // Impor yang diperlukan
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
@@ -49,7 +48,7 @@ fun PlanRouteScreen(
     navController: NavController,
     viewModel: PlanRouteViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
+    val context = LocalContext.current // Digunakan untuk getString di dalam LaunchedEffect
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -57,23 +56,22 @@ fun PlanRouteScreen(
     val uiState by viewModel.uiState.collectAsState()
     val selectedCustomerIds by viewModel.selectedCustomerIds.collectAsState()
     val selectedVehicleIds by viewModel.selectedVehicleIds.collectAsState()
-    val optimizationResult by viewModel.optimizationResult.collectAsState() // Untuk memantau hasil
+    // val optimizationResult by viewModel.optimizationResult.collectAsState() // Tidak digunakan secara langsung di UI ini
 
     LaunchedEffect(lifecycleOwner.lifecycle) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.uiEvent.collect { event ->
                 when (event) {
                     is PlanRouteUiEvent.ShowSnackbar -> {
-                        val message = event.messageText ?: event.messageResId?.let { stringResource(id = it) } ?: ""
+                        val message = event.messageText ?: event.messageResId?.let { context.getString(it) } ?: ""
                         if (message.isNotBlank()) {
-                            snackbarHostState.showSnackbar(message)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(message)
+                            }
                         }
                         Timber.d("PlanRoute Snackbar event: $message")
                     }
                     is PlanRouteUiEvent.NavigateToResults -> {
-                        // Navigasi ke layar hasil dengan membawa ID rencana rute
-                        // Data VrpSolution akan diambil dari ViewModel berdasarkan ID ini atau di-pass
-                        // Untuk saat ini, kita akan mengandalkan ViewModel untuk menyimpan hasil sementara
                         Timber.d("Navigating to results screen with plan ID: ${event.planId}")
                         navController.navigate(AppScreens.RouteResultsScreen.createRoute(event.planId))
                     }
@@ -94,7 +92,7 @@ fun PlanRouteScreen(
                         .padding(MaterialTheme.spacing.medium),
                     enabled = selectedCustomerIds.isNotEmpty() && selectedVehicleIds.isNotEmpty() && currentState.depot != null
                 ) {
-                    Icon(Icons.Filled.Route, contentDescription = null)
+                    Icon(imageVector = Icons.Filled.Route, contentDescription = null) // Menggunakan imageVector
                     Spacer(modifier = Modifier.width(MaterialTheme.spacing.small))
                     Text(stringResource(R.string.optimize_routes_button))
                 }
@@ -119,7 +117,7 @@ fun PlanRouteScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Icon(
-                            Icons.Filled.ErrorOutline,
+                            imageVector = Icons.Filled.ErrorOutline, // Menggunakan imageVector
                             contentDescription = null,
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.error
@@ -202,12 +200,10 @@ private fun PlanRouteContentView(
         contentPadding = PaddingValues(MaterialTheme.spacing.medium),
         verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.medium)
     ) {
-        // Informasi Depot
         item {
             DepotInfoCard(depot)
         }
 
-        // Pemilihan Pelanggan
         stickyHeader {
             ListSelectionHeader(
                 title = stringResource(R.string.select_customers_for_delivery),
@@ -215,7 +211,7 @@ private fun PlanRouteContentView(
                 totalCount = allCustomers.size,
                 onSelectAll = onSelectAllCustomers,
                 onDeselectAll = onDeselectAllCustomers,
-                icon = Icons.Filled.People
+                icon = Icons.Filled.People // Menggunakan ImageVector secara langsung
             )
         }
         if (allCustomers.isEmpty()) {
@@ -230,7 +226,6 @@ private fun PlanRouteContentView(
             }
         }
 
-        // Pemilihan Kendaraan
         stickyHeader {
             ListSelectionHeader(
                 title = stringResource(R.string.select_vehicles_to_use),
@@ -238,11 +233,11 @@ private fun PlanRouteContentView(
                 totalCount = allVehicles.size,
                 onSelectAll = onSelectAllVehicles,
                 onDeselectAll = onDeselectAllVehicles,
-                icon = Icons.Filled.LocalShipping
+                icon = Icons.Filled.LocalShipping // Menggunakan ImageVector secara langsung
             )
         }
         if (allVehicles.isEmpty()) {
-            item { EmptyListItemInfo(message = stringResource(R.string.vehicle_list_empty)) } // Atau pesan "tidak ada kendaraan"
+            item { EmptyListItemInfo(message = stringResource(R.string.vehicle_list_empty)) }
         } else {
             items(allVehicles, key = { "vehicle-${it.id}" }) { vehicle ->
                 SelectableVehicleItem(
@@ -253,8 +248,7 @@ private fun PlanRouteContentView(
             }
         }
 
-        // Spacer di akhir untuk memberi ruang bagi BottomBar
-        item { Spacer(modifier = Modifier.height(80.dp)) }
+        item { Spacer(modifier = Modifier.height(80.dp)) } // Spacer untuk BottomBar
     }
 }
 
@@ -294,12 +288,12 @@ private fun ListSelectionHeader(
     totalCount: Int,
     onSelectAll: () -> Unit,
     onDeselectAll: () -> Unit,
-    icon: ImageVector
+    icon: ImageVector // Tipe sudah benar ImageVector
 ) {
-    Surface( // Untuk efek sticky header dengan background
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-        tonalElevation = 2.dp
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f), // Memberi sedikit transparansi
+        tonalElevation = 2.dp // Memberi sedikit bayangan untuk efek sticky
     ) {
         Row(
             modifier = Modifier
@@ -309,7 +303,7 @@ private fun ListSelectionHeader(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(icon, contentDescription = title, tint = MaterialTheme.colorScheme.primary)
+                Icon(imageVector = icon, contentDescription = title, tint = MaterialTheme.colorScheme.primary) // Menggunakan imageVector
                 Spacer(Modifier.width(MaterialTheme.spacing.small))
                 Text(
                     text = "$title ($selectedCount/$totalCount)",
@@ -336,9 +330,9 @@ private fun SelectableCustomerItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(8.dp)) // Bentuk sudut untuk Card
             .clickable(onClick = onToggle)
-            .border(
+            .border( // Tambahkan border
                 width = if (isSelected) 2.dp else 1.dp,
                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 shape = RoundedCornerShape(8.dp)
@@ -427,12 +421,11 @@ private fun EmptyListItemInfo(message: String) {
             .fillMaxWidth()
             .padding(MaterialTheme.spacing.medium)
             .background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp), RoundedCornerShape(8.dp))
-            .padding(MaterialTheme.spacing.medium),
+            .padding(MaterialTheme.spacing.medium), // Padding ganda, mungkin cukup sekali
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Icon(imageVector = Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(modifier = Modifier.width(MaterialTheme.spacing.small))
         Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-

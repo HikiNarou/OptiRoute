@@ -19,16 +19,11 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 
-/**
- * ViewModel untuk SettingsScreen.
- * Mengelola state dan logika bisnis terkait pengaturan aplikasi.
- */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val depotRepository: DepotRepository,
     private val vehicleRepository: VehicleRepository,
     private val customerRepository: CustomerRepository
-    // Tambahkan repository lain jika ada pengaturan yang terkait dengannya
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(appVersion = BuildConfig.VERSION_NAME))
@@ -47,39 +42,43 @@ class SettingsViewModel @Inject constructor(
             Timber.i("Attempting to clear all application data.")
 
             var allClearSuccess = true
-            var errorMessage: String? = null
+            var errorOccurred = false // Flag untuk menandai jika ada error
+            var lastErrorMessage: String? = null // Menyimpan pesan error terakhir jika ada
 
             // Hapus data depot
-            when (val depotResult = depotRepository.clearAllDepots()) {
-                is AppResult.Success -> Timber.d("Depots cleared successfully.")
-                is AppResult.Error -> {
+            val depotResult = depotRepository.clearAllDepots()
+            if (depotResult is AppResult.Error) {
+                allClearSuccess = false
+                errorOccurred = true
+                lastErrorMessage = depotResult.message ?: "Gagal menghapus data depot."
+                Timber.e(depotResult.exception, "Error clearing depot data: $lastErrorMessage")
+            } else {
+                Timber.d("Depots cleared successfully.")
+            }
+
+            // Hapus data kendaraan, hanya jika operasi sebelumnya berhasil
+            if (allClearSuccess) {
+                val vehicleResult = vehicleRepository.clearAllVehicles()
+                if (vehicleResult is AppResult.Error) {
                     allClearSuccess = false
-                    errorMessage = depotResult.message ?: "Failed to clear depot data."
-                    Timber.e(depotResult.exception, "Error clearing depot data: $errorMessage")
+                    errorOccurred = true
+                    lastErrorMessage = vehicleResult.message ?: "Gagal menghapus data kendaraan."
+                    Timber.e(vehicleResult.exception, "Error clearing vehicle data: $lastErrorMessage")
+                } else {
+                    Timber.d("Vehicles cleared successfully.")
                 }
             }
 
-            // Hapus data kendaraan (jika depot berhasil atau tetap lanjut)
+            // Hapus data pelanggan, hanya jika operasi sebelumnya berhasil
             if (allClearSuccess) {
-                when (val vehicleResult = vehicleRepository.clearAllVehicles()) {
-                    is AppResult.Success -> Timber.d("Vehicles cleared successfully.")
-                    is AppResult.Error -> {
-                        allClearSuccess = false
-                        errorMessage = vehicleResult.message ?: "Failed to clear vehicle data."
-                        Timber.e(vehicleResult.exception, "Error clearing vehicle data: $errorMessage")
-                    }
-                }
-            }
-
-            // Hapus data pelanggan (jika sebelumnya berhasil atau tetap lanjut)
-            if (allClearSuccess) {
-                when (val customerResult = customerRepository.clearAllCustomers()) {
-                    is AppResult.Success -> Timber.d("Customers cleared successfully.")
-                    is AppResult.Error -> {
-                        allClearSuccess = false
-                        errorMessage = customerResult.message ?: "Failed to clear customer data."
-                        Timber.e(customerResult.exception, "Error clearing customer data: $errorMessage")
-                    }
+                val customerResult = customerRepository.clearAllCustomers()
+                if (customerResult is AppResult.Error) {
+                    allClearSuccess = false
+                    // errorOccurred = true; // Tidak perlu diset lagi jika sudah true
+                    lastErrorMessage = customerResult.message ?: "Gagal menghapus data pelanggan."
+                    Timber.e(customerResult.exception, "Error clearing customer data: $lastErrorMessage")
+                } else {
+                    Timber.d("Customers cleared successfully.")
                 }
             }
 
@@ -88,11 +87,11 @@ class SettingsViewModel @Inject constructor(
             if (allClearSuccess) {
                 Timber.i("All application data cleared successfully.")
                 _uiEvent.emit(SettingsUiEvent.ShowSnackbar(messageResId = R.string.data_cleared_successfully))
-                // Mungkin perlu memicu pembaruan di layar lain jika mereka menampilkan data ini
-                // atau mengandalkan event untuk mereset state mereka.
             } else {
-                Timber.e("Failed to clear all application data. Last error: $errorMessage")
-                _uiEvent.emit(SettingsUiEvent.ShowSnackbar(messageText = errorMessage ?: context.getString(R.string.error_clearing_data)))
+                Timber.e("Failed to clear all application data. Last error: $lastErrorMessage")
+                // Mengirim pesan error mentah atau resource ID jika ada pesan fallback yang lebih generik
+                // PERBAIKAN: Mengirim messageText atau messageResId, bukan context.getString
+                _uiEvent.emit(SettingsUiEvent.ShowSnackbar(messageText = lastErrorMessage ?: "Gagal membersihkan sebagian data."))
             }
         }
     }
@@ -101,13 +100,8 @@ class SettingsViewModel @Inject constructor(
 data class SettingsUiState(
     val appVersion: String,
     val isClearingData: Boolean = false
-    // Tambahkan state lain untuk pengaturan di masa mendatang
-    // val selectedMapStyle: String = "Normal",
-    // val selectedDistanceUnit: String = "km"
 )
 
 sealed interface SettingsUiEvent {
     data class ShowSnackbar(val messageResId: Int? = null, val messageText: String? = null) : SettingsUiEvent
-    // Tambahkan event lain jika perlu, misalnya navigasi ke layar detail pengaturan
 }
-

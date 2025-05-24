@@ -15,7 +15,7 @@ import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.KeyboardType // Impor yang benar
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -31,9 +31,9 @@ import timber.log.Timber
 fun AddEditVehicleScreen(
     navController: NavController,
     viewModel: VehicleViewModel = hiltViewModel(),
-    vehicleId: Int? // Null jika mode tambah, non-null jika mode edit
+    vehicleId: Int?
 ) {
-    val context = LocalContext.current
+    val context = LocalContext.current // Digunakan untuk getString di dalam LaunchedEffect
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -55,12 +55,15 @@ fun AddEditVehicleScreen(
             viewModel.uiEvent.collect { event ->
                 when (event) {
                     is VehicleUiEvent.ShowSnackbar -> {
+                        // Mengambil string di dalam coroutine scope, sebelum memanggil showSnackbar
                         val message = event.messageText ?: event.messageResId?.let {
-                            if (event.args != null) stringResource(id = it, formatArgs = event.args)
-                            else stringResource(id = it)
+                            if (event.args != null) context.getString(it, *event.args) // Menggunakan context.getString
+                            else context.getString(it)
                         } ?: ""
                         if (message.isNotBlank()) {
-                            snackbarHostState.showSnackbar(message)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(message)
+                            }
                         }
                     }
                     is VehicleUiEvent.NavigateBack -> {
@@ -91,7 +94,7 @@ fun AddEditVehicleScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp) // Sedikit elevasi
+                    containerColor = MaterialTheme.colorScheme.surfaceColorAtElevation(3.dp)
                 )
             )
         }
@@ -121,7 +124,7 @@ fun AddEditVehicleScreen(
                     imeAction = ImeAction.Next
                 ),
                 isError = formState.nameError != null,
-                supportingText = formState.nameError?.let { { Text(stringResource(it)) } }
+                supportingText = formState.nameError?.let { errorResId -> { Text(stringResource(errorResId)) } }
             )
 
             OutlinedTextField(
@@ -132,11 +135,11 @@ fun AddEditVehicleScreen(
                 placeholder = { Text(stringResource(R.string.vehicle_capacity_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.NumberDecimal,
+                    keyboardType = KeyboardType.Decimal, // PERBAIKAN di sini
                     imeAction = ImeAction.Next
                 ),
                 isError = formState.capacityError != null,
-                supportingText = formState.capacityError?.let { { Text(stringResource(it)) } }
+                supportingText = formState.capacityError?.let { errorResId -> { Text(stringResource(errorResId)) } }
             )
 
             OutlinedTextField(
@@ -147,11 +150,11 @@ fun AddEditVehicleScreen(
                 placeholder = { Text(stringResource(R.string.vehicle_capacity_unit_hint)) },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Words, // Atau None jika ingin bebas
+                    capitalization = KeyboardCapitalization.None, // Biasanya satuan tidak dikapitalisasi otomatis
                     imeAction = ImeAction.Next
                 ),
                 isError = formState.capacityUnitError != null,
-                supportingText = formState.capacityUnitError?.let { { Text(stringResource(it)) } }
+                supportingText = formState.capacityUnitError?.let { errorResId -> { Text(stringResource(errorResId)) } }
             )
 
             OutlinedTextField(

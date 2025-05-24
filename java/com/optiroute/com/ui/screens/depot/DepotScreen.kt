@@ -26,7 +26,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.navigation.NavController
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
+// import com.google.android.gms.tasks.CancellationTokenSource // Tidak selalu diperlukan jika menggunakan await
 import com.optiroute.com.R
 import com.optiroute.com.domain.model.LatLng
 import com.optiroute.com.ui.navigation.AppScreens
@@ -43,7 +43,7 @@ fun DepotScreen(
     navController: NavController,
     viewModel: DepotViewModel = hiltViewModel()
 ) {
-    val context = LocalContext.current
+    val context = LocalContext.current // Digunakan untuk getString di dalam LaunchedEffect
     val lifecycleOwner = LocalLifecycleOwner.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -52,35 +52,34 @@ fun DepotScreen(
     val formState by viewModel.formState.collectAsState()
 
     var showPermissionRationaleDialog by remember { mutableStateOf(false) }
-    var permissionRequestedAtLeastOnce by remember { mutableStateOf(false) }
+
+    // Mengambil string resource di lingkup Composable untuk digunakan dalam callback
+    val permissionDeniedMessage = stringResource(id = R.string.location_permission_denied_message)
+    val permissionGrantedMessage = stringResource(id = R.string.success) + ": " + stringResource(id = R.string.location_permission_rationale_title) // Sesuaikan jika ini judul, atau buat string baru untuk "izin diberikan"
 
 
-    // Launcher untuk meminta izin lokasi
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
         onResult = { permissions ->
-            permissionRequestedAtLeastOnce = true
             val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
             val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
 
             if (fineLocationGranted || coarseLocationGranted) {
                 Timber.d("Location permission granted.")
                 coroutineScope.launch {
-                    snackbarHostState.showSnackbar(context.getString(R.string.success) + ": Izin lokasi diberikan.")
+                    snackbarHostState.showSnackbar(permissionGrantedMessage)
                 }
-                // Coba dapatkan lokasi saat ini
-                getCurrentLocation(context) { latLng ->
+                getCurrentLocation(context) { latLng -> // Pastikan getCurrentLocation aman dari thread
                     viewModel.onLocationSelected(latLng)
                 }
             } else {
                 Timber.w("Location permission denied.")
-                showPermissionRationaleDialog = true // Tampilkan dialog jika izin ditolak
+                showPermissionRationaleDialog = true
             }
         }
     )
 
-    // Mengamati NavController SavedStateHandle untuk hasil dari SelectLocationMapScreen
-    LaunchedEffect(navController) {
+    LaunchedEffect(navController, lifecycleOwner) {
         navController.currentBackStackEntry?.savedStateHandle?.let { savedStateHandle ->
             savedStateHandle.getLiveData<Double>(AppScreens.SelectLocationMap.RESULT_LAT)
                 .observe(lifecycleOwner) { lat ->
@@ -89,7 +88,6 @@ fun DepotScreen(
                             if (lat != null && lng != null) {
                                 Timber.d("Received location from map: Lat=$lat, Lng=$lng")
                                 viewModel.onLocationSelected(LatLng(lat, lng))
-                                // Hapus state agar tidak terpicu lagi saat kembali ke layar ini
                                 savedStateHandle.remove<Double>(AppScreens.SelectLocationMap.RESULT_LAT)
                                 savedStateHandle.remove<Double>(AppScreens.SelectLocationMap.RESULT_LNG)
                             }
@@ -98,15 +96,17 @@ fun DepotScreen(
         }
     }
 
-
     LaunchedEffect(lifecycleOwner.lifecycle) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             viewModel.uiEvent.collect { event ->
                 when (event) {
                     is DepotUiEvent.ShowSnackbar -> {
-                        val message = event.messageText ?: event.messageResId?.let { stringResource(id = it) } ?: ""
+                        // Menggunakan context yang sudah di-capture dari lingkup Composable
+                        val message = event.messageText ?: event.messageResId?.let { context.getString(it) } ?: ""
                         if (message.isNotBlank()) {
-                            snackbarHostState.showSnackbar(message)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(message)
+                            }
                         }
                     }
                     is DepotUiEvent.RequestLocationPermission -> {
@@ -135,18 +135,16 @@ fun DepotScreen(
             message = stringResource(id = R.string.location_permission_rationale_message),
             onConfirm = {
                 showPermissionRationaleDialog = false
-                // Buka pengaturan aplikasi jika pengguna ingin memberikan izin secara manual
                 context.openAppSettings()
             },
             onDismiss = {
                 showPermissionRationaleDialog = false
                 coroutineScope.launch {
-                    snackbarHostState.showSnackbar(context.getString(R.string.location_permission_denied_message))
+                    snackbarHostState.showSnackbar(permissionDeniedMessage)
                 }
             }
         )
     }
-
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) }
@@ -169,10 +167,8 @@ fun DepotScreen(
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(vertical = MaterialTheme.spacing.medium)
                     )
-                    // Mungkin tambahkan tombol retry di sini
                 }
                 is DepotUiState.Success, DepotUiState.Empty -> {
-                    // Tampilkan form input baik jika depot sudah ada atau belum
                     DepotInputForm(
                         formState = formState,
                         onNameChange = viewModel::onNameChange,
@@ -217,8 +213,6 @@ private fun DepotInputForm(
     onSelectOnMapClick: () -> Unit,
     onUseCurrentLocationClick: () -> Unit
 ) {
-    val context = LocalContext.current
-
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -240,10 +234,9 @@ private fun DepotInputForm(
                 imeAction = ImeAction.Next
             ),
             isError = formState.nameError != null,
-            supportingText = formState.nameError?.let { { Text(stringResource(it)) } }
+            supportingText = formState.nameError?.let { errorResId -> { Text(stringResource(errorResId)) } }
         )
 
-        // Tampilan Lokasi
         Text(
             text = stringResource(R.string.depot_location_label),
             style = MaterialTheme.typography.titleMedium
@@ -258,14 +251,14 @@ private fun DepotInputForm(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        if (formState.locationError != null) {
+        val locationErrorResource = formState.locationError // Variabel lokal untuk smart cast
+        if (locationErrorResource != null) {
             Text(
-                text = stringResource(id = formState.locationError),
+                text = stringResource(id = locationErrorResource),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall
             )
         }
-
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -288,7 +281,6 @@ private fun DepotInputForm(
                 Text(stringResource(R.string.use_current_location))
             }
         }
-
 
         OutlinedTextField(
             value = formState.address,
@@ -325,31 +317,27 @@ private fun DepotInputForm(
     }
 }
 
-
 private fun getCurrentLocation(context: android.content.Context, onLocationFetched: (LatLng) -> Unit) {
     if (!context.hasLocationPermission()) {
         Timber.w("Attempted to get current location without permission.")
-        // Seharusnya sudah ditangani oleh pemanggil untuk meminta izin
         return
     }
-
     val fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
-    val cancellationTokenSource = CancellationTokenSource()
-
-    fusedLocationClient.getCurrentLocation(
-        Priority.PRIORITY_HIGH_ACCURACY, // Atau PRIORITY_BALANCED_POWER_ACCURACY
-        cancellationTokenSource.token
-    ).addOnSuccessListener { location ->
-        if (location != null) {
-            Timber.d("Current location fetched: Lat=${location.latitude}, Lng=${location.longitude}")
-            onLocationFetched(LatLng(location.latitude, location.longitude))
-        } else {
-            Timber.w("Failed to get current location, location is null.")
-            // Mungkin coba last known location sebagai fallback atau tampilkan error
-            // Untuk kesederhanaan, kita tidak melakukan fallback di sini
+    try {
+        fusedLocationClient.getCurrentLocation(
+            Priority.PRIORITY_HIGH_ACCURACY,
+            null // CancellationToken bisa null jika tidak ada operasi pembatalan spesifik
+        ).addOnSuccessListener { location ->
+            if (location != null) {
+                Timber.d("Current location fetched: Lat=${location.latitude}, Lng=${location.longitude}")
+                onLocationFetched(LatLng(location.latitude, location.longitude))
+            } else {
+                Timber.w("Failed to get current location, location is null.")
+            }
+        }.addOnFailureListener { exception ->
+            Timber.e(exception, "Error getting current location.")
         }
-    }.addOnFailureListener { exception ->
-        Timber.e(exception, "Error getting current location.")
-        // Tampilkan pesan error ke pengguna
+    } catch (e: SecurityException) {
+        Timber.e(e, "SecurityException in getCurrentLocation (DepotScreen)")
     }
 }
