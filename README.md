@@ -2,7 +2,7 @@
 
 ## Analisis Pemrograman Berorientasi Objek
 
-Proyek ini merupakan bagian dari studi **Program Studi D-IV Manajemen Informatika, Jurusan Manajemen Informatika, Politeknik Negeri Sriwijaya, Palembang 2025**. [cite: 1, 3]
+Proyek ini merupakan bagian dari studi **Program Studi D-IV Manajemen Informatika, Jurusan Manajemen Informatika, Politeknik Negeri Sriwijaya, Palembang 2025**.
 
 **Anggota Kelompok 8:**
 * Andhika Pratama (062340833112)
