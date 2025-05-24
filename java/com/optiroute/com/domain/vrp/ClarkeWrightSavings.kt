@@ -109,8 +109,7 @@ class ClarkeWrightSavings @Inject constructor() {
             val suitableVehicle = vehicles.firstOrNull { vehicle ->
                 vehicle.capacity >= mergedDemand &&
                         (routeI.vehicleId == null || routeI.vehicleId == vehicle.id) &&
-                        (routeJ.vehicleId == null || routeJ.vehicleId == vehicle.id) &&
-                        (routeI.vehicleId == null || routeJ.vehicleId == null || routeI.vehicleId == vehicle.id) // Kendaraan harus sama jika keduanya sudah punya
+                        (routeJ.vehicleId == null || routeJ.vehicleId == vehicle.id)
             }
 
             if (suitableVehicle != null) {
@@ -169,17 +168,37 @@ class ClarkeWrightSavings @Inject constructor() {
         // 4. Finalisasi Rute dan Penugasan Kendaraan (jika belum) + 2-Opt
         val finalRouteDetails = mutableListOf<RouteDetail>()
         val assignedCustomerIds = mutableSetOf<Int>()
+        // Initialize a mutable list of vehicles, sorted by capacity ascending.
+        // This list will be used to pick from available vehicles.
         val availableVehicles = vehicles.sortedBy { it.capacity }.toMutableList() // Urutkan dari kapasitas terkecil
 
+        // Strategy for final vehicle assignment:
+        // 1. Process route segments sorted by their total demand in descending order (largest demand first).
+        // This prioritizes finding vehicles for routes that carry the most load.
         activeRoutes.sortByDescending { it.currentDemand }
 
         for (segment in activeRoutes) {
             if (segment.customers.isEmpty()) continue
 
             val vehicleForSegment: VehicleEntity? = if (segment.vehicleId != null) {
+                // If a vehicle was already assigned to this segment during the merging phase, use it.
+                // This ensures consistency for routes formed with specific vehicle constraints.
                 vehicles.firstOrNull { it.id == segment.vehicleId } // Gunakan kendaraan yang sudah ditugaskan jika ada
             } else {
-                // Coba cari kendaraan yang belum dipakai dan cocok, prioritaskan yang paling pas
+                // For segments without a pre-assigned vehicle:
+                // Attempt to find an available vehicle. The strategy is greedy:
+                // - Filter `availableVehicles` to those that can meet the `segment.currentDemand`.
+                // - From the suitable vehicles, pick the one with the smallest capacity (`minByOrNull { it.capacity }`).
+                //   This is a "tightest fit" or "best fit" heuristic for the current segment.
+                //
+                // Potential limitations of this greedy "tightest fit for largest demand segment" approach:
+                // - Suboptimality: While locally optimal (minimizes unused capacity for the *current* segment),
+                //   it might not be globally optimal for the entire fleet.
+                // - Inefficient large vehicle use: Smaller vehicles might be assigned to large routes if they just fit,
+                //   potentially leaving larger vehicles underutilized for subsequent, smaller routes.
+                // - Increased unassigned customers: Exhausting smaller vehicles early on large routes (that larger
+                //   vehicles could have handled) might leave no suitable vehicles for other (potentially numerous)
+                //   smaller routes, leading to more unassigned customers.
                 availableVehicles.filter { it.capacity >= segment.currentDemand }
                     .minByOrNull { it.capacity }
             }
@@ -220,17 +239,44 @@ class ClarkeWrightSavings @Inject constructor() {
         }
 
         val limitedFinalRoutes = if (finalRouteDetails.size > vehicles.size) {
+            // Scenario: More routes have been successfully formed and assigned vehicles
+            // than the number of physical vehicles available in the input `vehicles` list.
+            // This typically occurs if multiple merged route segments (RouteSegment) ended up
+            // being associated with the same vehicleId during the merging phase, leading to
+            // more RouteDetail objects than actual vehicles.
             Timber.w("Generated ${finalRouteDetails.size} routes, but only ${vehicles.size} vehicles selected/available. Truncating by taking routes with most customers.")
-            // Mengurutkan kembali berdasarkan jumlah stop mungkin tidak ideal jika beberapa kendaraan kecil
-            // lebih baik daripada satu kendaraan besar yang melayani sedikit.
-            // Untuk saat ini, kita ambil saja sejumlah kendaraan yang tersedia.
-            // Strategi yang lebih baik mungkin melibatkan penggabungan kembali atau prioritas lain.
+
+            // Truncation Strategy:
+            // The current strategy is a heuristic:
+            // 1. Sort all generated routes (`finalRouteDetails`) in descending order based on their `totalDemand`.
+            // 2. Select the top `vehicles.size` routes from this sorted list.
+            // This prioritizes routes that serve the highest cumulative demand.
+            //
+            // The existing comment "// Mengurutkan kembali ..." also notes that sorting by number of stops
+            // might not be ideal and other strategies like re-merging could be considered.
+            //
+            // Potential limitations and suboptimality of this heuristic:
+            // - Ignores Vehicle Capacity Utilization: A selected high-demand route might use a large vehicle
+            //   inefficiently. Discarded routes, if combined, might have utilized the fleet capacity better
+            //   and served more customers or a similar total demand more effectively.
+            // - Ignores Route Distances/Operational Costs: The primary sorting key is `totalDemand`.
+            //   A very long, high-demand route might be kept over shorter, more operationally efficient routes.
+            // - Fixed Set Selection: The selection is made from the currently formed `finalRouteDetails`.
+            //   It doesn't attempt to re-optimize by breaking up or re-combining customers from discarded
+            //   routes with parts of selected routes.
+            // - Combinatorial Complexity: Finding the absolute "best" subset of routes that maximizes a
+            //   multi-faceted objective (e.g., demand served, low cost, high utilization) under vehicle
+            //   constraints is a complex combinatorial problem (akin to knapsack or set-covering problems).
+            //   Simple heuristics are common for tractability.
             finalRouteDetails.sortedByDescending { it.totalDemand } // Atau berdasarkan jarak, atau jumlah stop
                 .take(vehicles.size)
         } else {
+            // If the number of formed routes is within the vehicle limit, use all of them.
             finalRouteDetails
         }
 
+        // Populate the set of customer IDs that are part of the final, limited routes.
+        // This is used to determine unassigned customers.
         val trulyAssignedCustomerIds = mutableSetOf<Int>()
         limitedFinalRoutes.forEach { route ->
             route.stops.forEach { customer ->
@@ -269,7 +315,7 @@ class ClarkeWrightSavings @Inject constructor() {
             iterationCounter++
             improved = false
             for (i in 0 until bestRoute.size - 1) {
-                for (j in i + 1 until bestRoute.size) {
+                for (j in i + 2 until bestRoute.size) {
                     val newRoute = bestRoute.toMutableList()
 
                     // Balik segmen dari (i+1) sampai j (inklusif)
